@@ -1,0 +1,29 @@
+stage("Git Clone"){
+       git 'https://github.com/prasadclassy/java-web-app-docker.git'
+    }
+    
+    stage("Maven Clean Package"){
+        def mavenHome= tool name: "Maven-3.6.3", type: "maven"
+        def mavenCMD= "${mavenHome}/bin/mvn clean"
+        sh "${mavenCMD} clean package"
+    }
+    
+    stage("Build Docker Image"){
+        sh "docker build -t prasadth/java-web-app:${buildNumber} ."
+    }
+    
+    stage("Push Docker Image"){
+        withCredentials([string(credentialsId: 'Docker_Hub_Pwd', variable: 'Docker_Hub_Pwd')]) {
+            sh "docker login -u prasadth -p ${Docker_Hub_Pwd}"
+       }
+        sh "docker push prasadth/java-web-app:${buildNumber}"
+    }
+    
+    stage("Deploy Docker Service In Docker Swarm Cluster"){
+        sshagent(['Docker_Swarm_Manager_SSH']) {
+          sh "ssh -o StrictHostKeyChecking=no ubuntu@172.31.21.246 docker service rm javawebapp || true"
+          sh "ssh -o StrictHostKeyChecking=no ubuntu@172.31.21.246 docker service create --name javawebapp -p 8080:8080 --replicas 2 prasadth/java-web-app:${buildNumber}"
+       }
+    }
+    
+}
